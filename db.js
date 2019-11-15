@@ -5,17 +5,21 @@ const conn = new Sequelize('postgres://localhost:5432/acmeofferings', {
     logging: false
 });
 
+const idParam = {
+    primaryKey: true,
+    type: UUID,
+    defaultValue: UUIDV4
+}
+
+const nameParam = {
+    type: STRING,
+    allowNull: false,
+    unique: true,
+}
+
 const Product = conn.define('product', {
-    id: {
-        primaryKey: true,
-        type: UUID,
-        defaultValue: UUIDV4
-    },
-    name: {
-        type: STRING,
-        allowNull: false,
-        unique: true,
-    },
+    id: idParam,
+    name: nameParam,
     suggestedPrice: {
         type: DECIMAL,
         allowNull: false,
@@ -23,71 +27,47 @@ const Product = conn.define('product', {
 });
 
 const Company = conn.define('company', {
-    id:{
-        primaryKey: true,
-        type: UUID,
-        defaultValue: UUIDV4
-    },
-    name:{
-        type: STRING,
-        allowNull:false,
-        unique: true
-    }
+    id: idParam,
+    name: nameParam,
 });
 
 const Offering = conn.define('offering', {
+    id: idParam,
     price:{
         type: DECIMAL,
         allowNull: false
     }
 })
 
-Product.belongsToMany(Company, {through:'offering', as:'companyOffering'});
-Company.belongsToMany(Product, {through:'offering', as:'companyOffering'});
-
-const seed = async () => {
-    const productOne = await Product.create(
-        {
-            name:'foe',
-            suggestedPrice: 4
-        }
-    );
-    const productTwo = await Product.create(
-        {
-            name: 'moe',
-            suggestedPrice: 5
-        }
-    );
-    const companyOne = await Company.create(
-        {
-            name: 'ACME US'
-        }
-    );
-    const companyTwo = await Company.create(
-        {
-            name: 'ACME GLOBAL'
-        }
-    );
-    const offeringOne = await Offering.create(
-        {
-            price: 11,
-            productId: productOne.id,
-            companyId: companyOne.id,
-        }
-    );
-    const offeringTwo = await Offering.create(
-        {
-            price: 14,
-            productId: productTwo.id,
-            companyId: companyTwo.id
-        }
-    );
-}
+Product.belongsToMany(Company, { through:'offering' });
+Company.belongsToMany(Product, { through:'offering' });
 
 const seedAndSync = async () => {
-    return conn.sync( { force: true })
-    .then(() => seed())
-    .catch(e => console.log(e))
+    await conn.sync( { force: true })
+
+    const companies = [
+        { name: 'ACME US' },
+        { name: 'ACME GLOBAL' },
+        { name: 'ACME TRI-STATE' }
+    ]
+
+    const products = [
+        { name: 'foo', suggestedPrice: 3 },
+        { name: 'bar', suggestedPrice: 5 },
+        { name: 'bazz', suggestedPrice: 9 }
+    ]
+
+    const [ acmeUs, acmeGlobal, acmeTristate] = await Promise.all( companies.map(company => Company.create(company)));
+    const [ foo, bar, bazz ] = await Promise.all( products.map(product => Product.create(product)));
+
+    const offerings = [
+        { companyId: acmeUs.id, productId: foo.id, price: 2.9 },
+        { companyId: acmeGlobal.id, productId: foo.id, price: 2.8 },
+        { companyId: acmeGlobal.id, productId: bar.id, price: 4.5 },
+        { companyId: acmeTristate.id, productId: bazz.id, price: 11 }
+    ]
+
+    await Promise.all( offerings.map( offering => Offering.create(offering)));
 }
 
 module.exports = {
